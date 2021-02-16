@@ -79,13 +79,6 @@ func (dht *DHT) bitsToValues(bits []int) (humidity float64, temperature float64,
 			sum8 = 0
 		}
 	}
-	// if high 16 bit is set, value is negtive
-	// 1000000000000000 = 0x8000
-	if (temperatureInt & 0x8000) > 0 {
-		// flip bits 16 and lower to get negtive number for int
-		// 1111111111111111 = 0xffff
-		temperatureInt |= ^0xffff
-	}
 
 	// get checkSum value
 	for i = 32; i < 40; i++ {
@@ -94,6 +87,13 @@ func (dht *DHT) bitsToValues(bits []int) (humidity float64, temperature float64,
 	}
 
 	if dht.sensorType != "dht11" {
+		// if high 16 bit is set, value is negtive
+		// 1000000000000000 = 0x8000
+		if (temperatureInt & 0x8000) > 0 {
+			// flip bits 16 and lower to get negtive number for int
+			// 1111111111111111 = 0xffff
+			temperatureInt |= ^0xffff
+		}
 		// humidity is between 0 % to 100 %
 		if humidityInt < 0 || humidityInt > 1000 {
 			err = fmt.Errorf("bad data - humidity: %v", humidityInt)
@@ -117,31 +117,34 @@ func (dht *DHT) bitsToValues(bits []int) (humidity float64, temperature float64,
 		}
 
 		return
-	}
+	} else { // DHT11
+		humidityInt >>= 8 // less significant byte useless
+		temperatureInt >>= 8 // less significant byte useless
+		// humidity is between 0 % to 100 %
+		if humidityInt < 0 || humidityInt > 100 {
+			err = fmt.Errorf("bad data - humidity: %v", humidityInt)
+			return
+		}
+		// temperature between 0 C to 50 C
+		if temperatureInt < 0 || temperatureInt > 50 {
+			err = fmt.Errorf("bad data - temperature: %v", temperatureInt)
+			return
+		}
+		// check checkSum
+		if checkSum != sumTotal {
+			err = fmt.Errorf("bad data - check sum fail")
+		}
 
-	// humidity is between 0 % to 100 %
-	if humidityInt < 0 || humidityInt > 100 {
-		err = fmt.Errorf("bad data - humidity: %v", humidityInt)
+		humidity = float64(humidityInt)
+		if dht.temperatureUnit == Celsius {
+			temperature = float64(temperatureInt)
+		} else {
+			temperature = float64(temperatureInt)*9.0/5.0 + 32.0
+		}
+
 		return
 	}
-	// temperature between 0 C to 50 C
-	if temperatureInt < 0 || temperatureInt > 50 {
-		err = fmt.Errorf("bad data - temperature: %v", temperatureInt)
-		return
-	}
-	// check checkSum
-	if checkSum != sumTotal {
-		err = fmt.Errorf("bad data - check sum fail")
-	}
 
-	humidity = float64(humidityInt)
-	if dht.temperatureUnit == Celsius {
-		temperature = float64(temperatureInt)
-	} else {
-		temperature = float64(temperatureInt)*9.0/5.0 + 32.0
-	}
-
-	return
 }
 
 // ReadRetry will call Read until there is no errors or the maxRetries is hit.
@@ -149,6 +152,7 @@ func (dht *DHT) bitsToValues(bits []int) (humidity float64, temperature float64,
 func (dht *DHT) ReadRetry(maxRetries int) (humidity float64, temperature float64, err error) {
 	for i := 0; i < maxRetries; i++ {
 		humidity, temperature, err = dht.Read()
+		time.Sleep(500*time.Millisecond) // Wait before next read
 		if err == nil {
 			return
 		}

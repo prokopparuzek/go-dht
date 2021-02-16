@@ -63,7 +63,7 @@ func (dht *DHT) readBits() ([]int, error) {
 		dht.pin.Out(gpio.High)
 		return nil, fmt.Errorf("pin out low error: %v", err)
 	}
-	time.Sleep(time.Millisecond)
+	time.Sleep(20*time.Millisecond) // wait for DHT11
 
 	// send start high
 	err = dht.pin.In(gpio.PullUp, gpio.NoEdge)
@@ -107,7 +107,7 @@ func (dht *DHT) readBits() ([]int, error) {
 		}
 		if i < 80 {
 			// not enough readings, i = 79 means endNumber is 78 or less
-			return nil, fmt.Errorf("missing some readings - low level not found")
+			return nil, fmt.Errorf("missing some readings - low level not found (%d)", i)
 		}
 	}
 	startNumber := endNumber - 79
